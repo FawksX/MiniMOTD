@@ -23,6 +23,7 @@
  */
 package xyz.jpenilla.minimotd.common.config;
 
+import com.google.common.collect.Lists;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
@@ -51,6 +52,8 @@ public final class MiniMOTDConfig {
     + " - Putting more than one will cause one to be randomly chosen each refresh")
   private final List<MOTD> motds = new ArrayList<>();
 
+  private final MOTD legacyMOTD = new MOTD();
+
   @Comment("Enable MOTD-related features")
   private boolean motdEnabled = true;
 
@@ -58,6 +61,8 @@ public final class MiniMOTDConfig {
   private boolean iconEnabled = true;
 
   private PlayerCountSettings playerCountSettings = new PlayerCountSettings();
+
+  private Playercounter playercounter = new Playercounter();
 
   public int adjustedMaxPlayers(final int onlinePlayers, final int actualMaxPlayers) {
     if (this.playerCountSettings.maxPlayersEnabled) {
@@ -151,12 +156,23 @@ public final class MiniMOTDConfig {
 
   }
 
+  @ConfigSerializable
+  public static class Playercounter {
+
+    private List<String> text = Lists.newArrayList();
+
+  }
+
   public boolean iconEnabled() {
     return this.iconEnabled;
   }
 
   public @NonNull List<MOTD> motds() {
     return this.motds;
+  }
+
+  public MOTD getLegacyMOTD() {
+    return this.legacyMOTD;
   }
 
   public boolean motdEnabled() {
@@ -174,4 +190,10 @@ public final class MiniMOTDConfig {
   public boolean disablePlayerListHover() {
     return this.playerCountSettings.disablePlayerListHover;
   }
+
+  public List<String> getHover() {
+    return this.playercounter.text;
+  }
+
+
 }

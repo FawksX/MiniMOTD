@@ -23,6 +23,7 @@
  */
 package xyz.jpenilla.minimotd.velocity;
 
+import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -42,7 +43,7 @@ import com.velocitypowered.api.proxy.server.ServerPing;
 import com.velocitypowered.api.util.Favicon;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bstats.velocity.Metrics;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.slf4j.Logger;
@@ -56,6 +57,8 @@ import xyz.jpenilla.minimotd.common.config.MiniMOTDConfig;
 
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
 
 @Plugin(
   id = "${project.name}",
@@ -74,6 +77,10 @@ public final class MiniMOTDPlugin implements MiniMOTDPlatform<Favicon> {
   private final CommandManager commandManager;
   private final Path dataDirectory;
   private final Metrics.Factory metricsFactory;
+
+  private final LegacyComponentSerializer sectionRGB = LegacyComponentSerializer.builder().character('§').hexCharacter('#').hexColors().build();
+  private final LegacyComponentSerializer unusualSectionRGB = LegacyComponentSerializer.builder().character('§').hexCharacter('#').hexColors().useUnusualXRepeatedCharacterHexFormat().build();
+  private final LegacyComponentSerializer ampersandRGB = LegacyComponentSerializer.builder().character('&').hexCharacter('#').hexColors().build();
 
   @Inject
   public MiniMOTDPlugin(
@@ -142,13 +149,7 @@ public final class MiniMOTDPlugin implements MiniMOTDPlatform<Favicon> {
 
     final ServerPing.Builder pong = ping.getPing().asBuilder();
 
-    final int onlinePlayers = this.miniMOTD.calculateOnlinePlayers(config, pong.getOnlinePlayers());
-    pong.onlinePlayers(onlinePlayers);
-
-    final int maxPlayers = config.adjustedMaxPlayers(onlinePlayers, pong.getMaximumPlayers());
-    pong.maximumPlayers(maxPlayers);
-
-    final MOTDIconPair<Favicon> pair = this.miniMOTD.createMOTD(config, onlinePlayers, maxPlayers);
+    final MOTDIconPair<Favicon> pair = this.miniMOTD.createMOTD(config, this.server.getPlayerCount(), pong.getMaximumPlayers());
     final Favicon favicon = pair.icon();
     if (favicon != null) {
       pong.favicon(favicon);
@@ -158,7 +159,11 @@ public final class MiniMOTDPlugin implements MiniMOTDPlatform<Favicon> {
     if (motdString != null) {
       Component motdComponent = this.miniMessage.parse(motdString);
       if (pong.getVersion().getProtocol() < Constants.MINECRAFT_1_16_PROTOCOL_VERSION) {
-        motdComponent = GsonComponentSerializer.colorDownsamplingGson().deserialize(GsonComponentSerializer.colorDownsamplingGson().serialize(motdComponent));
+        final String motd = String.format("%s&r\n%s", config.getLegacyMOTD().line1(), config.getLegacyMOTD().line2())
+          .replace("{onlinePlayers}", String.valueOf(pong.getOnlinePlayers()))
+          .replace("{maxPlayers}", String.valueOf(pong.getMaximumPlayers()))
+          .replace("{br}", "\n");
+        motdComponent = LegacyComponentSerializer.legacyAmpersand().deserialize(motd);
       }
       pong.description(motdComponent);
     }
@@ -166,6 +171,14 @@ public final class MiniMOTDPlugin implements MiniMOTDPlatform<Favicon> {
     if (config.disablePlayerListHover()) {
       pong.clearSamplePlayers();
     }
+
+    final List<ServerPing.SamplePlayer> playerList = Lists.newArrayList();
+
+    for (final String s : config.getHover()) {
+      playerList.add(new ServerPing.SamplePlayer(this.unusualSectionRGB.serialize(this.ampersandRGB.deserialize(this.unusualSectionRGB.serialize(MiniMessage.markdown().parse(s)))), UUID.randomUUID()));
+    }
+
+    pong.samplePlayers(playerList.toArray(new ServerPing.SamplePlayer[0]));
 
     ping.setPing(pong.build());
   }
